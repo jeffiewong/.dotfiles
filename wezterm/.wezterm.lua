@@ -1,7 +1,7 @@
 -- ----------------------------------------------------------------
 -- WezTerm config for windows 
 --
--- Enable similar functionalities as Tmux in Linux/MacOS
+-- Enable similar multiplexing functionalities as Tmux in Linux/MacOS
 -- ----------------------------------------------------------------
 
 local wezterm = require("wezterm")
@@ -13,37 +13,11 @@ local tabline = wezterm.plugin.require("https://github.com/michaelbrusegard/tabl
 -- Default shell (PowerShell 7)
 config.default_prog = { "C:\\Program Files\\PowerShell\\7\\pwsh.exe", "-NoLogo" }
 
-local function is_wsl()
-  local f = io.open('/proc/sys/kernel/osrelease', 'r')
-  if f then
-    local content = f:read('*all')
-    f:close()
-    if string.find(content:lower(), 'microsoft') or string.find(content:lower(), 'wsl') then
-      return true
-    end
-  end
-  if os.getenv('WSL_DISTRO_NAME') then
-    return true
-  end
-  return false
-end
-
-local function is_powershell()
-  -- Check default_prog first (instance-wide)
-  if config.default_prog and #config.default_prog > 0 then
-    local prog = config.default_prog[1]:lower()
-    if prog:find('powershell%.exe') or prog:find('pwsh%.exe') then
-      return true
-    end
-  end
-  return false
-end
-
--- local in_wsl = is_wsl()
--- wezterm.log_info(in_wsl and 'WSL detected' or 'Not WSL')
-
--- local in_powershell = is_powershell()
--- wezterm.log_info(in_powershell and 'Powershell detected' or 'Not Powershell') 
+-- Maximize on startup
+wezterm.on("gui-startup", function(cmd)
+    local tab, pane, window = mux.spawn_window(cmd or {})
+    window:gui_window():toggle_fullscreen()
+end)
 
 config.font = wezterm.font("Hack Nerd Font")
 config.color_scheme = "Catppuccin Mocha"
@@ -81,8 +55,52 @@ wezterm.on('copy-or-interrupt', function(window, pane)
     end
 end)
 
--- Custom keybinds
+-- Listen to is_tmux user var emitted from tmux; Disable leader key when tmux is active
+-- wezterm.on('user-var-changed', function(window, pane, name, value)
+--     wezterm.log_info("User Var detected: " .. tostring(name) .. " = " .. tostring(value))
+--     if name == 'is_tmux' then
+--         local overrides = window:get_config_overrides() or {}
+        
+--         if value == 'true' then
+--             -- Disable WezTerm leader when tmux is active
+--             overrides.leader = { key = 'a', mods = 'CTRL|ALT|SHIFT|SUPER', timeout_milliseconds = 1000 }
+--             wezterm.log_info('Tmux active - WezTerm leader disabled')
+--         else
+--             -- Re-enable WezTerm leader
+--             overrides.leader = nil
+--             wezterm.log_info('Tmux inactive - WezTerm leader enabled')
+--         end
+        
+--         window:set_config_overrides(overrides)
+--     end
+-- end)
+
+-- Enable/disable wezterm leader key
+wezterm.on("toggle-leader", function(window, pane)
+    local overrides = window:get_config_overrides() or {}
+    if not overrides.leader then
+        overrides.leader = { key = "F13", mods = "CTRL|ALT|SHIFT|SUPER" }
+        wezterm.log_info("[toggle-leader] WezTerm leader disabled")
+    else
+        -- restore to the main leader
+        overrides.leader = nil
+        wezterm.log_info("[toggle-leader] WezTerm leader enabled")
+    end
+    window:set_config_overrides(overrides)
+end)
+
+-- Custom keybinds for multiplexing
+config.leader = { key = 'a', mods = 'CTRL', timeout_milliseconds = 2000 }
+
 config.keys = {
+
+    -- Manual switch to disable wezterm leader key when using tmux
+    {
+		key = 'F12',
+		mods = 'NONE',
+		action = wezterm.action {EmitEvent = "toggle-leader"},
+	},
+
     -- Original keybind for leader key <C-a> is Select-All, rebind Select-All to <leader>a
     { key = 'a', mods = 'LEADER', action = act.SendKey { key = 'a', mods = 'CTRL' }, },
     -- <C-c> to copy text if there are text highlighted, otherwise send interrupt signal
@@ -91,26 +109,66 @@ config.keys = {
     { key = 'v', mods = 'CTRL', action = act.PasteFrom 'Clipboard' },
     -- Copy mode
     { key = '[', mods = 'LEADER', action = act.ActivateCopyMode, },
-}
-
-if in_powershell then
-    config.leader = { key = 'a', mods = 'CTRL', timeout_milliseconds = 2000 }
 
     -- ----------------------------------------------------------------
     -- Workspaces
     --
     -- Roughly equivalent to tmux sessions.
     -- ----------------------------------------------------------------
-    
-    -- Show all workspaces
-    table.insert(config.keys, {
+
+    -- Create new workspace (with Powershell or WSL selection)
+    {
+        key = 'S',
+        mods = 'LEADER|SHIFT',
+        action = act.InputSelector {
+            description = 'Choose shell for new workspace',
+            choices = {
+                { label = 'WSL', id= 'wsl' },
+                { label = 'PowerShell', id = 'powershell' },
+            },
+            action = wezterm.action_callback(function(window, pane, id, label)
+                wezterm.log_info('InputSelector triggered: id=' .. (id or 'nil') .. ', label=' .. (label or 'nil'))
+
+                if (not id) or (not label) then
+                    wezterm.log_info('No selection made, exiting')
+                    return
+                end
+
+                local spawn_config
+                if label == 'PowerShell' then
+                    spawn_config = {
+                        args = { 'C:\\Program Files\\PowerShell\\7\\pwsh.exe', '-NoLogo' }
+                    }
+                    wezterm.log_info('Selected PowerShell')
+                elseif label == 'WSL' then
+                    spawn_config = {
+                        domain = { DomainName = 'WSL:Ubuntu-22.04' },  -- Spawn via WSL domain
+                    }
+                    wezterm.log_info('Selected Ubuntu-22.04 domain')
+                else
+                    wezterm.log_info('Unknown Selection: ' .. label)
+                    return
+                end
+
+                wezterm.log_info('Attempting to switch to new workspace with: ' .. (spawn_config.domain and 'domain=' .. spawn_config.domain.DomainName or 'args=' .. table.concat(spawn_config.args or {}, ' ')))
+                window:perform_action(
+                    act.SwitchToWorkspace {
+                        spawn = spawn_config
+                    },
+                    pane
+                )
+                wezterm.log_info('SwitchToWorkspace action dispatched')
+            end),
+        },
+    },
+    -- Show list of workspaces
+    {
         key = 's',
         mods = 'LEADER',
         action = act.ShowLauncherArgs { flags = 'WORKSPACES' },
-    })
-
-    -- Rename current session; analagous to command in tmux
-    table.insert(config.keys, {
+    },
+    -- Rename current session
+    {
         key = '$',
         mods = 'LEADER|SHIFT',
         action = act.PromptInputLine {
@@ -126,7 +184,7 @@ if in_powershell then
                 end
             ),
         },
-    })
+    },
 
     -- ----------------------------------------------------------------
     -- TABS
@@ -135,19 +193,19 @@ if in_powershell then
     -- ----------------------------------------------------------------
 
     -- Show tab navigator; similar to listing windows in tmux
-    table.insert(config.keys, {
+    {
         key = 'w',
         mods = 'LEADER',
         action = act.ShowTabNavigator,
-    })
+    },
     -- Create a tab
-    table.insert(config.keys, {
+    {
         key = 'c',
         mods = 'LEADER',
         action = act.SpawnTab 'CurrentPaneDomain',
-    })
+    },
     -- Rename current window/tab displayed in Switch Menu
-    table.insert(config.keys, {
+    {
         key = ',',
         mods = 'LEADER',
         action = act.PromptInputLine {
@@ -160,25 +218,25 @@ if in_powershell then
                 end
             ),
         },
-    })
+    },
     -- Move to next tab
-    table.insert(config.keys, {
+    {
         key = 'n',
         mods = 'LEADER',
         action = act.ActivateTabRelative(1),
-    })
+    },
     -- Move to previous tab
-    table.insert(config.keys, {
+    {
         key = 'p',
         mods = 'LEADER',
         action = act.ActivateTabRelative(-1),
-    })
+    },
     -- Close tab
-    table.insert(config.keys, {
+    {
         key = '&',
         mods = 'LEADER|SHIFT',
         action = act.CloseCurrentTab{ confirm = true },
-    })
+    },
 
     -- ----------------------------------------------------------------
     -- PANES
@@ -188,52 +246,92 @@ if in_powershell then
     -- ----------------------------------------------------------------
 
     -- Vertical split
-    table.insert(config.keys, {
+    {
         key = '|',
         mods = 'LEADER|SHIFT',
         action = act.SplitPane {
             direction = 'Right',
             size = { Percent = 50 },
         },
-    })
+    },
     -- Horizontal split
-    table.insert(config.keys, {
-        -- -
+    {
         key = '-',
         mods = 'LEADER',
         action = act.SplitPane {
             direction = 'Down',
             size = { Percent = 50 },
         },
-    })
-    -- CTRL + (h,j,k,l) to move between panes
-    table.insert(config.keys, { key = 'h', mods = 'CTRL', action = act.ActivatePaneDirection 'Left' })
-    table.insert(config.keys, { key = 'j', mods = 'CTRL', action = act.ActivatePaneDirection 'Down' })
-    table.insert(config.keys, { key = 'k', mods = 'CTRL', action = act.ActivatePaneDirection 'Up' })
-    table.insert(config.keys,{ key = 'l', mods = 'CTRL', action = act.ActivatePaneDirection 'Right' })
-    -- ALT + (h,j,k,l) to resize panes
-    table.insert(config.keys,{ key = 'h', mods = 'ALT', action = act.AdjustPaneSize { 'Left', 1 } })
-    table.insert(config.keys,{ key = 'j', mods = 'ALT', action = act.AdjustPaneSize { 'Down', 1 } })
-    table.insert(config.keys,{ key = 'k', mods = 'ALT', action = act.AdjustPaneSize { 'Up', 1 } })
-    table.insert(config.keys,{ key = 'l', mods = 'ALT', action = act.AdjustPaneSize { 'Right', 1 } })
+    },
     -- Close/kill active pane
-    table.insert(config.keys,{
+    {
         key = 'x',
         mods = 'LEADER',
         action = act.CloseCurrentPane { confirm = true },
-    })
+    },
     -- Swap active pane with another one
-    table.insert(config.keys,{
+    {
         key = '{',
         mods = 'LEADER|SHIFT',
         action = act.PaneSelect { mode = "SwapWithActiveKeepFocus" },
-    })
+    },
     -- Zoom current pane (toggle)
-    table.insert(config.keys,{
+    {
         key = 'z',
         mods = 'LEADER',
         action = act.TogglePaneZoomState,
+    },
+}
+    
+-- Switch tabs
+for i = 1, 9 do
+    table.insert(config.keys, {
+        key = tostring(i),
+        mods = "LEADER",
+        action = act.ActivateTab(i - 1),
     })
 end
+
+-- smart-splits.nvim config. CTRL + (h,j,k,l) to move between panes | ALT + (h,j,k,l) to resize panes
+local direction_keys = {
+    h = "Left",
+    j = "Down",
+    k = "Up",
+    l = "Right",
+}
+
+local function is_vim(pane)
+    -- this is set by the plugin, and unset on ExitPre in Neovim
+    return pane:get_user_vars().IS_NVIM == "true"
+end
+
+local function split_nav(resize_or_move, key)
+    return {
+        key = key,
+        mods = resize_or_move == "resize" and "ALT" or "CTRL",
+        action = wezterm.action_callback(function(win, pane)
+            if is_vim(pane) then
+                win:perform_action({
+                    SendKey = { key = key, mods = resize_or_move == "resize" and "ALT" or "CTRL" },
+                }, pane)
+            else
+                if resize_or_move == "resize" then
+                    win:perform_action({ AdjustPaneSize = { direction_keys[key], 3 } }, pane)
+                else
+                    win:perform_action({ ActivatePaneDirection = direction_keys[key] }, pane)
+                end
+            end
+        end),
+    }
+end
+
+table.insert(config.keys, split_nav("move", "h"))
+table.insert(config.keys, split_nav("move", "j"))
+table.insert(config.keys, split_nav("move", "k"))
+table.insert(config.keys, split_nav("move", "l"))
+table.insert(config.keys, split_nav("resize", "h"))
+table.insert(config.keys, split_nav("resize", "j"))
+table.insert(config.keys, split_nav("resize", "k"))
+table.insert(config.keys, split_nav("resize", "l"))
 
 return config
