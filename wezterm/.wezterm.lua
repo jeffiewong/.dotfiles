@@ -75,15 +75,52 @@ end)
 --     end
 -- end)
 
+-- smart-splits.nvim config. CTRL + (h,j,k,l) to move between panes | ALT + (h,j,k,l) to resize panes
+local direction_keys = {
+    h = "Left",
+    j = "Down",
+    k = "Up",
+    l = "Right",
+}
+
+local function is_vim(pane)
+    -- this is set by the plugin, and unset on ExitPre in Neovim
+    return pane:get_user_vars().IS_NVIM == "true"
+end
+
+local function split_nav(resize_or_move, key)
+    return {
+        key = key,
+        mods = resize_or_move == "resize" and "ALT" or "CTRL",
+        action = wezterm.action_callback(function(win, pane)
+            if is_vim(pane) then
+                win:perform_action({
+                    SendKey = { key = key, mods = resize_or_move == "resize" and "ALT" or "CTRL" },
+                }, pane)
+            else
+                if resize_or_move == "resize" then
+                    win:perform_action({ AdjustPaneSize = { direction_keys[key], 3 } }, pane)
+                else
+                    win:perform_action({ ActivatePaneDirection = direction_keys[key] }, pane)
+                end
+            end
+        end),
+    }
+end
+
 -- Enable/disable wezterm leader key
 wezterm.on("toggle-leader", function(window, pane)
     local overrides = window:get_config_overrides() or {}
     if not overrides.leader then
         overrides.leader = { key = "F13", mods = "CTRL|ALT|SHIFT|SUPER" }
+        overrides.keys = {
+            { key = 'F12', mods = 'NONE', action = act.EmitEvent 'toggle-leader' },
+            { key = 'c', mods = 'CTRL', action = act.EmitEvent 'copy-or-interrupt' },
+        }
         wezterm.log_info("[toggle-leader] WezTerm leader disabled")
     else
-        -- restore to the main leader
         overrides.leader = nil
+        overrides.keys = nil
         wezterm.log_info("[toggle-leader] WezTerm leader enabled")
     end
     window:set_config_overrides(overrides)
@@ -281,6 +318,15 @@ config.keys = {
         mods = 'LEADER',
         action = act.TogglePaneZoomState,
     },
+    -- Move/Resize panes
+    split_nav("move", "h"),
+    split_nav("move", "j"),
+    split_nav("move", "k"),
+    split_nav("move", "l"),
+    split_nav("resize", "h"),
+    split_nav("resize", "j"),
+    split_nav("resize", "k"),
+    split_nav("resize", "l"),
 }
     
 -- Switch tabs
@@ -291,47 +337,5 @@ for i = 1, 9 do
         action = act.ActivateTab(i - 1),
     })
 end
-
--- smart-splits.nvim config. CTRL + (h,j,k,l) to move between panes | ALT + (h,j,k,l) to resize panes
-local direction_keys = {
-    h = "Left",
-    j = "Down",
-    k = "Up",
-    l = "Right",
-}
-
-local function is_vim(pane)
-    -- this is set by the plugin, and unset on ExitPre in Neovim
-    return pane:get_user_vars().IS_NVIM == "true"
-end
-
-local function split_nav(resize_or_move, key)
-    return {
-        key = key,
-        mods = resize_or_move == "resize" and "ALT" or "CTRL",
-        action = wezterm.action_callback(function(win, pane)
-            if is_vim(pane) then
-                win:perform_action({
-                    SendKey = { key = key, mods = resize_or_move == "resize" and "ALT" or "CTRL" },
-                }, pane)
-            else
-                if resize_or_move == "resize" then
-                    win:perform_action({ AdjustPaneSize = { direction_keys[key], 3 } }, pane)
-                else
-                    win:perform_action({ ActivatePaneDirection = direction_keys[key] }, pane)
-                end
-            end
-        end),
-    }
-end
-
-table.insert(config.keys, split_nav("move", "h"))
-table.insert(config.keys, split_nav("move", "j"))
-table.insert(config.keys, split_nav("move", "k"))
-table.insert(config.keys, split_nav("move", "l"))
-table.insert(config.keys, split_nav("resize", "h"))
-table.insert(config.keys, split_nav("resize", "j"))
-table.insert(config.keys, split_nav("resize", "k"))
-table.insert(config.keys, split_nav("resize", "l"))
 
 return config
