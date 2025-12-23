@@ -1,0 +1,9 @@
+theme = "Catppuccin Mocha"
+font-family = JetBrainsMono Nerd Font
+macos-titlebar-style = hidden
+
+window-padding-x = 10
+
+# key binds
+keybind = cmd+s>r=reload_config
+# keybind = cmd+r=reload_config
