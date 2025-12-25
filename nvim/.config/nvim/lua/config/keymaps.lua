@@ -14,8 +14,8 @@ vim.keymap.set("v", "<Tab>", ">gv", { desc = "Indent" })
 vim.keymap.set("v", "<S-Tab>", "<gv", { desc = "Un-indent" })
 
 -- Don't yank when delete or change
--- vim.keymap.set({ "n", "x" }, "d", '"_d"')
-vim.keymap.set({ "n", "x" }, "D", '"_D"')
-vim.keymap.set({ "n", "x" }, "c", '"_c"')
-vim.keymap.set({ "n", "x" }, "C", '"_C"')
-vim.keymap.set({ "n", "x" }, "x", '"_x"')
+-- vim.keymap.set({ "n", "x" }, "d", '"_d')
+vim.keymap.set({ "n", "x" }, "D", '"_D')
+vim.keymap.set({ "n", "x" }, "c", '"_c')
+vim.keymap.set({ "n", "x" }, "C", '"_C')
+vim.keymap.set({ "n", "x" }, "x", '"_x')
