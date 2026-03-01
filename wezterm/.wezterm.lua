@@ -39,6 +39,13 @@ config.colors = {
     visual_bell = colors.ansi[1]
 }
 
+-- Graphics
+config.animation_fps = 30
+-- config.front_end = "WebGpu"
+config.front_end = "OpenGL"
+config.max_fps = 120
+config.webgpu_power_preference = "HighPerformance"
+
 -- Bell
 config.visual_bell = {
     fade_in_function = 'Constant',
@@ -54,6 +61,7 @@ config.font_size = 11.0
 
 -- Window
 config.window_decorations = "RESIZE"
+config.win32_system_backdrop = 'Disable'
 config.text_background_opacity = 0.9
 config.window_background_opacity = 0.9
 config.enable_wayland = true
@@ -71,7 +79,7 @@ config.enable_tab_bar = true
 config.adjust_window_size_when_changing_font_size = false
 config.switch_to_last_active_tab_when_closing_tab = true
 config.hide_tab_bar_if_only_one_tab = false
-config.show_new_tab_button_in_tab_bar = true
+config.show_new_tab_button_in_tab_bar = false
 config.tab_bar_at_bottom = false
 config.use_fancy_tab_bar = false
 config.tab_max_width = 35
@@ -499,15 +507,15 @@ config.leader = { key = 'a', mods = 'CTRL', timeout_milliseconds = 2000 }
 config.keys = {
 
     -- Manual switch to disable wezterm leader key when using tmux
-    {
-        key = 'F12',
-        mods = 'NONE',
-        action = wezterm.action_callback(function(window, pane)
-            wezterm.log_info("Manual toggle Tmux mode")
-            tmux_mode = not tmux_mode
-            set_tmux_keys(window)
-        end),
-    },
+    -- {
+    --     key = 'F12',
+    --     mods = 'NONE',
+    --     action = wezterm.action_callback(function(window, pane)
+    --         wezterm.log_info("Manual toggle Tmux mode")
+    --         tmux_mode = not tmux_mode
+    --         set_tmux_keys(window)
+    --     end),
+    -- },
 
     -- Original keybind for leader key <C-a> is Select-All, rebind Select-All to <leader>a
     { key = 'a', mods = 'LEADER', action = act.SendKey { key = 'a', mods = 'CTRL' }, },
