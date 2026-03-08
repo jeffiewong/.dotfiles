@@ -13,6 +13,8 @@ vim.keymap.set("i", "<S-Tab>", "<C-d>", { desc = "Un-indent" })
 vim.keymap.set("v", "<Tab>", ">gv", { desc = "Indent" })
 vim.keymap.set("v", "<S-Tab>", "<gv", { desc = "Un-indent" })
 
+vim.keymap.set("n", "<C-n>", "<C-i>")
+
 -- Don't yank when delete or change
 -- vim.keymap.set({ "n", "x" }, "d", '"_d')
 vim.keymap.set({ "n", "x" }, "D", '"_D')
